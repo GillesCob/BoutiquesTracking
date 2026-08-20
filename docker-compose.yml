@@ -1,0 +1,11 @@
+services:
+  boutiques-tracking:
+    build: .
+    network_mode: host
+    environment:
+      - PORT=3003
+      - ALLOWED_ORIGIN=https://gillescobigo.com
+      - DB_PATH=/data/tracking.db
+    volumes:
+      - ./data:/data
+    restart: always

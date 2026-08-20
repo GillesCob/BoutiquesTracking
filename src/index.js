@@ -1,0 +1,69 @@
+import express from "express";
+import cors from "cors";
+import Database from "better-sqlite3";
+import path from "node:path";
+import fs from "node:fs";
+
+const PORT = process.env.PORT || 3003;
+const DB_PATH = process.env.DB_PATH || path.join(process.cwd(), "data", "tracking.db");
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || "https://gillescobigo.com";
+
+// Tier 1 uniquement (cf Projets/Boutiques/workflow-cc.md) : juste "quelle etape du funnel chaque
+// prospect a atteinte", pas d'attribution fine par CTA ni de temps passe sur la page.
+const ALLOWED_STEPS = new Set(["p1", "p2", "page-finale", "modale-numero", "visite-guidee"]);
+
+fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
+const db = new Database(DB_PATH);
+db.pragma("journal_mode = WAL");
+db.exec(`
+  CREATE TABLE IF NOT EXISTS events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    slug TEXT NOT NULL,
+    step TEXT NOT NULL,
+    ts TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_events_slug ON events(slug);
+`);
+
+const insertEvent = db.prepare("INSERT INTO events (slug, step, ts) VALUES (?, ?, ?)");
+const allEvents = db.prepare("SELECT slug, step, ts FROM events ORDER BY ts ASC");
+const eventsForSlug = db.prepare("SELECT step, ts FROM events WHERE slug = ? ORDER BY ts ASC");
+
+const app = express();
+app.use(cors({ origin: ALLOWED_ORIGIN }));
+app.use(express.json());
+
+// Route obligatoire sur tout backend (cf ~/.claude/CLAUDE.md).
+app.get("/health", (_req, res) => res.json({ status: "ok" }));
+
+// Beacon fire-and-forget appele par les pages du funnel. Ne doit jamais faire echouer le
+// fonctionnement de la page appelante (cote frontend : appel non bloquant, erreurs avalees) ;
+// cote backend, on reste strict sur le payload pour ne jamais stocker n'importe quoi.
+app.post("/track", (req, res) => {
+  const { slug, step } = req.body || {};
+  if (typeof slug !== "string" || !slug.trim() || !ALLOWED_STEPS.has(step)) {
+    return res.status(400).json({ error: "invalid payload" });
+  }
+  insertEvent.run(slug.trim().slice(0, 100), step, new Date().toISOString());
+  res.status(204).end();
+});
+
+// Lecture pour le Dashboard (Projets/Boutiques/suivi.html). Pas d'auth pour l'instant (donnees
+// non sensibles - juste "quel prospect a vu quelle etape a quel moment" -, endpoint non liste
+// nulle part publiquement, cf lessons deja actees sur ce type de compromis ailleurs dans le
+// vault). A durcir (cle partagee en query param minimum) si le besoin se confirme.
+app.get("/track", (_req, res) => {
+  const grouped = {};
+  for (const row of allEvents.all()) {
+    (grouped[row.slug] ||= []).push({ step: row.step, ts: row.ts });
+  }
+  res.json(grouped);
+});
+
+app.get("/track/:slug", (req, res) => {
+  res.json(eventsForSlug.all(req.params.slug));
+});
+
+app.listen(PORT, () => {
+  console.log(`boutiques-tracking listening on :${PORT}`);
+});
