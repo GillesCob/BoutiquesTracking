@@ -49,7 +49,12 @@ const app = express();
 const WWW_VARIANT = ALLOWED_ORIGIN.startsWith("https://www.")
   ? ALLOWED_ORIGIN.replace("https://www.", "https://")
   : ALLOWED_ORIGIN.replace("https://", "https://www.");
-app.use(cors({ origin: [ALLOWED_ORIGIN, WWW_VARIANT, "null"] }));
+// credentials:true (corrige le 20/08, 2e ecart trouve juste apres le fix www) : navigator.sendBeacon
+// envoie les requetes cross-origin avec credentials:"include", le navigateur bloque la reponse si
+// Access-Control-Allow-Credentials n'est pas explicitement "true", meme quand l'origine matche.
+// Aucun cookie n'est reellement lu/pose ici (payload JSON simple), c'est purement pour satisfaire
+// le mode credentials impose par sendBeacon lui-meme, pas un vrai besoin d'auth par cookie.
+app.use(cors({ origin: [ALLOWED_ORIGIN, WWW_VARIANT, "null"], credentials: true }));
 app.use(express.json());
 
 // Route obligatoire sur tout backend (cf ~/.claude/CLAUDE.md).
