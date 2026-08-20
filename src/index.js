@@ -6,7 +6,7 @@ import fs from "node:fs";
 
 const PORT = process.env.PORT || 3003;
 const DB_PATH = process.env.DB_PATH || path.join(process.cwd(), "data", "tracking.db");
-const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || "https://gillescobigo.com";
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || "https://www.gillescobigo.com";
 // Requise pour DELETE /track/:slug (remise a zero du tracking d'un prospect a l'envoi du mail de
 // prospection, cf Projets/Boutiques/workflow-cc.md). Le reste de l'API reste sans auth (donnees
 // non sensibles), mais une suppression est destructive et le slug est public (visible dans l'URL
@@ -39,7 +39,17 @@ const app = express();
 // Autorise le vrai domaine (beacon envoye par les pages prospect en prod/mockup) et l'origine
 // "null" (page ouverte en file://, cas du Dashboard Boutiques/suivi.html en local, pas de
 // credentials/cookie ici donc pas de risque a l'ouvrir a la lecture depuis un fichier local).
-app.use(cors({ origin: [ALLOWED_ORIGIN, "null"] }));
+// www ET sans www toujours autorises ensemble (corrige le 20/08) : ALLOWED_ORIGIN valait
+// "https://gillescobigo.com" (sans www) alors que gillescobigo.com redirige (308) vers
+// www.gillescobigo.com, seule origine que le navigateur envoie jamais reellement en prod -
+// aucun beacon de prospect reel n'a donc jamais passe le CORS depuis la mise en prod du
+// tracking, silencieusement (trackFunnelBeacon avale l'erreur cote front). www toujours inclus
+// en plus de ALLOWED_ORIGIN, quelle que soit sa valeur, pour ne plus jamais reproduire cet ecart
+// si le domaine canonique change un jour.
+const WWW_VARIANT = ALLOWED_ORIGIN.startsWith("https://www.")
+  ? ALLOWED_ORIGIN.replace("https://www.", "https://")
+  : ALLOWED_ORIGIN.replace("https://", "https://www.");
+app.use(cors({ origin: [ALLOWED_ORIGIN, WWW_VARIANT, "null"] }));
 app.use(express.json());
 
 // Route obligatoire sur tout backend (cf ~/.claude/CLAUDE.md).

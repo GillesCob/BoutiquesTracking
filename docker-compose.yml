@@ -4,7 +4,7 @@ services:
     network_mode: host
     environment:
       - PORT=3003
-      - ALLOWED_ORIGIN=https://gillescobigo.com
+      - ALLOWED_ORIGIN=https://www.gillescobigo.com
       - DB_PATH=/data/tracking.db
       - ADMIN_KEY=${ADMIN_KEY}
     volumes:
