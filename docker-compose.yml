@@ -6,6 +6,7 @@ services:
       - PORT=3003
       - ALLOWED_ORIGIN=https://gillescobigo.com
       - DB_PATH=/data/tracking.db
+      - ADMIN_KEY=${ADMIN_KEY}
     volumes:
       - ./data:/data
     restart: always

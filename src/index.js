@@ -7,6 +7,11 @@ import fs from "node:fs";
 const PORT = process.env.PORT || 3003;
 const DB_PATH = process.env.DB_PATH || path.join(process.cwd(), "data", "tracking.db");
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || "https://gillescobigo.com";
+// Requise pour DELETE /track/:slug (remise a zero du tracking d'un prospect a l'envoi du mail de
+// prospection, cf Projets/Boutiques/workflow-cc.md). Le reste de l'API reste sans auth (donnees
+// non sensibles), mais une suppression est destructive et le slug est public (visible dans l'URL
+// du prospect) : n'importe qui le connaissant pourrait sinon vider les donnees d'un autre.
+const ADMIN_KEY = process.env.ADMIN_KEY;
 
 // Tier 1 uniquement (cf Projets/Boutiques/workflow-cc.md) : juste "quelle etape du funnel chaque
 // prospect a atteinte", pas d'attribution fine par CTA ni de temps passe sur la page.
@@ -28,6 +33,7 @@ db.exec(`
 const insertEvent = db.prepare("INSERT INTO events (slug, step, ts) VALUES (?, ?, ?)");
 const allEvents = db.prepare("SELECT slug, step, ts FROM events ORDER BY ts ASC");
 const eventsForSlug = db.prepare("SELECT step, ts FROM events WHERE slug = ? ORDER BY ts ASC");
+const deleteEventsForSlug = db.prepare("DELETE FROM events WHERE slug = ?");
 
 const app = express();
 // Autorise le vrai domaine (beacon envoye par les pages prospect en prod/mockup) et l'origine
@@ -65,6 +71,19 @@ app.get("/track", (_req, res) => {
 
 app.get("/track/:slug", (req, res) => {
   res.json(eventsForSlug.all(req.params.slug));
+});
+
+// Remise a zero du tracking d'un prospect (cf Projets/Boutiques/workflow-cc.md, "remise a zero a
+// l'envoi du mail") : les visites de Gilles lui-meme (relecture/verification, avant l'envoi)
+// n'ont pas vocation a se melanger aux vraies visites du prospect une fois le mail parti. Protege
+// par ADMIN_KEY (destructif, slug public donc devinable). Si ADMIN_KEY n'est pas configuree,
+// l'endpoint refuse tout appel plutot que d'accepter une suppression non protegee par defaut.
+app.delete("/track/:slug", (req, res) => {
+  if (!ADMIN_KEY || req.query.key !== ADMIN_KEY) {
+    return res.status(401).json({ error: "unauthorized" });
+  }
+  const { changes } = deleteEventsForSlug.run(req.params.slug);
+  res.json({ deleted: changes });
 });
 
 app.listen(PORT, () => {
