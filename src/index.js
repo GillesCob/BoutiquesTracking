@@ -30,7 +30,10 @@ const allEvents = db.prepare("SELECT slug, step, ts FROM events ORDER BY ts ASC"
 const eventsForSlug = db.prepare("SELECT step, ts FROM events WHERE slug = ? ORDER BY ts ASC");
 
 const app = express();
-app.use(cors({ origin: ALLOWED_ORIGIN }));
+// Autorise le vrai domaine (beacon envoye par les pages prospect en prod/mockup) et l'origine
+// "null" (page ouverte en file://, cas du Dashboard Boutiques/suivi.html en local, pas de
+// credentials/cookie ici donc pas de risque a l'ouvrir a la lecture depuis un fichier local).
+app.use(cors({ origin: [ALLOWED_ORIGIN, "null"] }));
 app.use(express.json());
 
 // Route obligatoire sur tout backend (cf ~/.claude/CLAUDE.md).
