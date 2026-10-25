@@ -1,4 +1,4 @@
-FROM node:22-alpine
+FROM node:22.23.4-alpine
 WORKDIR /app
 
 # Outils de compilation pour le module natif better-sqlite3 (meme pattern que argon2 sur Nexio,
